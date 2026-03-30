@@ -341,6 +341,117 @@
       max-width: 100%;
     }
 
+    .song-panel .song-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.65rem;
+      align-items: center;
+      margin-top: 0.85rem;
+    }
+
+    .btn-song {
+      appearance: none;
+      border: 1px solid rgba(168, 85, 247, 0.45);
+      background: linear-gradient(135deg, rgba(99, 102, 241, 0.25), rgba(168, 85, 247, 0.15));
+      color: var(--fg);
+      padding: 0.65rem 1.15rem;
+      border-radius: 12px;
+      font: inherit;
+      font-weight: 600;
+      font-size: 0.9rem;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.15s;
+    }
+
+    .btn-song:hover:not(:disabled) {
+      background: linear-gradient(135deg, rgba(99, 102, 241, 0.4), rgba(168, 85, 247, 0.28));
+    }
+
+    .btn-song:disabled {
+      opacity: 0.55;
+      cursor: wait;
+    }
+
+    .song-card {
+      display: grid;
+      grid-template-columns: 88px 1fr;
+      gap: 1rem;
+      align-items: center;
+      margin-top: 1.1rem;
+      padding: 1rem 1.1rem;
+      border-radius: 16px;
+      border: 1px solid var(--glass-border);
+      background: rgba(0, 0, 0, 0.28);
+    }
+
+    .song-card.hidden { display: none; }
+
+    .song-card img {
+      width: 88px;
+      height: 88px;
+      border-radius: 12px;
+      object-fit: cover;
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    .song-info {
+      min-width: 0;
+    }
+
+    .song-title {
+      font-family: "Syne", sans-serif;
+      font-weight: 700;
+      font-size: 1.05rem;
+      line-height: 1.25;
+      margin-bottom: 0.25rem;
+    }
+
+    .song-artist {
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    .song-meta {
+      font-size: 0.75rem;
+      color: rgba(244, 242, 255, 0.4);
+      margin-top: 0.45rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .song-card-actions {
+      grid-column: 1 / -1;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-top: 0.25rem;
+    }
+
+    .song-card-actions a.btn-secondary {
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+    }
+
+    .song-error {
+      margin-top: 0.75rem;
+      font-size: 0.88rem;
+      color: #f87171;
+    }
+
+    .song-error.hidden { display: none; }
+
+    .song-options {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-top: 0.65rem;
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+
+    .song-options input { accent-color: #a855f7; cursor: pointer; }
+
     footer {
       margin-top: 2.25rem;
       font-size: 0.78rem;
@@ -408,6 +519,37 @@
           <span>Load audio file</span>
           <input type="file" id="audio-file" accept="audio/*" />
         </div>
+      </section>
+
+      <section class="panel song-panel">
+        <div class="panel-head">
+          <h2>Real song for your mood</h2>
+        </div>
+        <p class="hint">
+          Fetches a matching track from a music catalog (Deezer when available). You can preview ~30s or open the full song.
+        </p>
+        <div class="song-actions">
+          <button type="button" class="btn-song" id="fetch-song">Get a song</button>
+          <button type="button" class="btn-secondary" id="fetch-song-again" disabled>Pick another</button>
+        </div>
+        <label class="song-options">
+          <input type="checkbox" id="auto-song" checked />
+          <span>Auto-fetch when mood changes</span>
+        </label>
+        <div class="song-card hidden" id="song-card" aria-live="polite">
+          <img id="song-cover" width="88" height="88" alt="Album art" />
+          <div class="song-info">
+            <div class="song-title" id="song-title">—</div>
+            <div class="song-artist" id="song-artist">—</div>
+            <div class="song-meta" id="song-meta"></div>
+          </div>
+          <div class="song-card-actions">
+            <button type="button" class="btn-secondary" id="song-preview">Preview</button>
+            <a class="btn-secondary" id="song-open" href="#" target="_blank" rel="noopener noreferrer">Open track</a>
+            <a class="btn-secondary" id="song-search-yt" href="#" target="_blank" rel="noopener noreferrer">Search on YouTube</a>
+          </div>
+        </div>
+        <p class="song-error hidden" id="song-error"></p>
       </section>
     </main>
 
@@ -516,6 +658,268 @@
 
       vizSlider.addEventListener("input", () => {
         vizIntensity = Number(vizSlider.value) / 100;
+      });
+
+      const moodSongQueries = {
+        chill: "chill relaxing lofi ambient",
+        happy: "happy upbeat pop dance",
+        angry: "intense aggressive metal rock energy",
+        melancholy: "melancholic sad indie acoustic",
+      };
+
+      const fallbackCurated = {
+        chill: [
+          { title: "Weightless", artist: "Marconi Union" },
+          { title: "Breathe Me", artist: "Sia" },
+          { title: "Holocene", artist: "Bon Iver" },
+        ],
+        happy: [
+          { title: "Walking on Sunshine", artist: "Katrina and the Waves" },
+          { title: "Happy", artist: "Pharrell Williams" },
+          { title: "Good as Hell", artist: "Lizzo" },
+        ],
+        angry: [
+          { title: "Break Stuff", artist: "Limp Bizkit" },
+          { title: "Killing in the Name", artist: "Rage Against the Machine" },
+          { title: "Bodies", artist: "Drowning Pool" },
+        ],
+        melancholy: [
+          { title: "Motion Picture Soundtrack", artist: "Radiohead" },
+          { title: "Hurt", artist: "Johnny Cash" },
+          { title: "The Night We Met", artist: "Lord Huron" },
+        ],
+      };
+
+      const fetchSongBtn = document.getElementById("fetch-song");
+      const fetchAgainBtn = document.getElementById("fetch-song-again");
+      const songCard = document.getElementById("song-card");
+      const songCover = document.getElementById("song-cover");
+      const songTitleEl = document.getElementById("song-title");
+      const songArtistEl = document.getElementById("song-artist");
+      const songMetaEl = document.getElementById("song-meta");
+      const songOpen = document.getElementById("song-open");
+      const songSearchYt = document.getElementById("song-search-yt");
+      const songPreviewBtn = document.getElementById("song-preview");
+      const songErrorEl = document.getElementById("song-error");
+      const autoSongCheckbox = document.getElementById("auto-song");
+
+      let songPreviewAudio = null;
+      let lastSynthWasRunning = false;
+      let songFetchDebounce = null;
+      let lastTrackPool = [];
+
+      function pickRandom(arr) {
+        return arr[Math.floor(Math.random() * arr.length)];
+      }
+
+      function ytSearchUrl(title, artist) {
+        const q = encodeURIComponent(`${artist} ${title} official audio`);
+        return `https://www.youtube.com/results?search_query=${q}`;
+      }
+
+      function showSongError(msg) {
+        songErrorEl.textContent = msg;
+        songErrorEl.classList.remove("hidden");
+      }
+
+      function clearSongError() {
+        songErrorEl.classList.add("hidden");
+        songErrorEl.textContent = "";
+      }
+
+      function stopSongPreview() {
+        if (songPreviewAudio) {
+          songPreviewAudio.pause();
+          songPreviewAudio.src = "";
+          songPreviewAudio = null;
+        }
+        songPreviewBtn.textContent = "Preview";
+        if (lastSynthWasRunning && audioRunning && !micMode && !fileAudio) {
+          startMoodSynth();
+          lastSynthWasRunning = false;
+        }
+      }
+
+      function displayTrack(track) {
+        if (track.artwork) {
+          songCover.src = track.artwork;
+          songCover.style.opacity = "1";
+        } else {
+          songCover.src =
+            "data:image/svg+xml," +
+            encodeURIComponent(
+              '<svg xmlns="http://www.w3.org/2000/svg" width="88" height="88"><rect fill="#1a1a24" width="88" height="88" rx="12"/><text x="44" y="52" text-anchor="middle" fill="#888" font-size="11" font-family="system-ui">♪</text></svg>'
+            );
+          songCover.style.opacity = "0.9";
+        }
+        songCover.alt = track.album ? `${track.album} artwork` : "Album art";
+        songTitleEl.textContent = track.title;
+        songArtistEl.textContent = track.artist;
+        songMetaEl.textContent = track.source + (track.year ? " · " + track.year : "");
+        if (track.openUrl) {
+          songOpen.href = track.openUrl;
+          songOpen.style.display = "inline-flex";
+        } else {
+          songOpen.href = "#";
+          songOpen.style.display = "none";
+        }
+        songSearchYt.href = ytSearchUrl(track.title, track.artist);
+        songCard.classList.remove("hidden");
+        fetchAgainBtn.disabled = lastTrackPool.length < 2;
+      }
+
+      async function fetchDeezer(query) {
+        const url = `https://api.deezer.com/search?q=${encodeURIComponent(query)}&limit=25`;
+        const res = await fetch(url);
+        if (!res.ok) throw new Error("Deezer unavailable");
+        return res.json();
+      }
+
+      async function fetchItunes(query) {
+        const url = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&entity=song&limit=25`;
+        const res = await fetch(url);
+        if (!res.ok) throw new Error("Catalog unavailable");
+        return res.json();
+      }
+
+      function mapDeezerTrack(t) {
+        return {
+          title: t.title,
+          artist: t.artist && t.artist.name ? t.artist.name : "Unknown",
+          artistSort: t.artist && t.artist.name ? t.artist.name : "",
+          album: t.album && t.album.title ? t.album.title : "",
+          artwork: t.album && t.album.cover_medium ? t.album.cover_medium : "",
+          previewUrl: t.preview || "",
+          openUrl: t.link || "",
+          source: "Deezer",
+          year: "",
+        };
+      }
+
+      function mapItunesTrack(t) {
+        return {
+          title: t.trackName,
+          artist: t.artistName,
+          artistSort: t.artistName,
+          album: t.collectionName,
+          artwork: t.artworkUrl100 ? t.artworkUrl100.replace("100x100", "300x300") : "",
+          previewUrl: t.previewUrl || "",
+          openUrl: t.trackViewUrl || "",
+          source: "Apple Music / iTunes",
+          year: t.releaseDate ? String(new Date(t.releaseDate).getFullYear()) : "",
+        };
+      }
+
+      function mapFallbackTrack(c) {
+        const q = `${c.artist} ${c.title}`;
+        return {
+          title: c.title,
+          artist: c.artist,
+          artistSort: c.artist,
+          album: "",
+          artwork: "",
+          previewUrl: "",
+          openUrl: "",
+          source: "Suggestion (offline)",
+          year: "",
+          ytOnly: true,
+        };
+      }
+
+      async function loadSongForMood() {
+        clearSongError();
+        fetchSongBtn.disabled = true;
+        fetchAgainBtn.disabled = true;
+        const q = moodSongQueries[currentMood];
+        try {
+          const dz = await fetchDeezer(q);
+          if (dz.error) throw new Error("Deezer error");
+          if (dz.data && dz.data.length) {
+            lastTrackPool = dz.data.map(mapDeezerTrack);
+            displayTrack(pickRandom(lastTrackPool));
+            fetchSongBtn.disabled = false;
+            fetchAgainBtn.disabled = lastTrackPool.length < 2;
+            return;
+          }
+        } catch (e) {
+          /* try next */
+        }
+        try {
+          const it = await fetchItunes(q);
+          if (it.results && it.results.length) {
+            lastTrackPool = it.results.map(mapItunesTrack);
+            displayTrack(pickRandom(lastTrackPool));
+            fetchSongBtn.disabled = false;
+            fetchAgainBtn.disabled = lastTrackPool.length < 2;
+            return;
+          }
+        } catch (e) {
+          /* fallback */
+        }
+        lastTrackPool = fallbackCurated[currentMood].map(mapFallbackTrack);
+        displayTrack(pickRandom(lastTrackPool));
+        showSongError("Live catalog unreachable — showing a curated pick. You can still open YouTube.");
+        fetchSongBtn.disabled = false;
+        fetchAgainBtn.disabled = lastTrackPool.length < 2;
+      }
+
+      function pickAnotherFromPool() {
+        if (lastTrackPool.length < 2) return;
+        stopSongPreview();
+        let next;
+        let guard = 0;
+        do {
+          next = pickRandom(lastTrackPool);
+          guard++;
+        } while (guard < 12 && lastTrackPool.length > 1 && next.title === songTitleEl.textContent);
+        displayTrack(next);
+      }
+
+      function scheduleSongFetch() {
+        if (!autoSongCheckbox.checked) return;
+        clearTimeout(songFetchDebounce);
+        songFetchDebounce = setTimeout(() => {
+          loadSongForMood();
+        }, 450);
+      }
+
+      fetchSongBtn.addEventListener("click", () => {
+        stopSongPreview();
+        loadSongForMood();
+      });
+
+      fetchAgainBtn.addEventListener("click", () => {
+        pickAnotherFromPool();
+      });
+
+      songPreviewBtn.addEventListener("click", () => {
+        if (songTitleEl.textContent === "—" || !lastTrackPool.length) return;
+        const track =
+          lastTrackPool.find(
+            (t) => t.title === songTitleEl.textContent && t.artist === songArtistEl.textContent
+          ) || lastTrackPool.find((t) => t.title === songTitleEl.textContent) || lastTrackPool[0];
+        if (!track || !track.previewUrl) {
+          window.open(songSearchYt.href, "_blank", "noopener,noreferrer");
+          return;
+        }
+        if (songPreviewAudio && !songPreviewAudio.paused) {
+          stopSongPreview();
+          return;
+        }
+        lastSynthWasRunning = audioRunning && !micMode && !fileAudio;
+        if (lastSynthWasRunning) stopMoodSynth();
+        songPreviewAudio = new Audio(track.previewUrl);
+        songPreviewAudio.crossOrigin = "anonymous";
+        songPreviewBtn.textContent = "Stop";
+        songPreviewAudio.onended = () => stopSongPreview();
+        songPreviewAudio.onerror = () => {
+          stopSongPreview();
+          showSongError("Preview failed — try Open track or YouTube.");
+        };
+        songPreviewAudio.play().catch(() => {
+          stopSongPreview();
+          showSongError("Preview blocked — try Open track or YouTube.");
+        });
       });
 
       function applyMoodFilter() {
@@ -783,6 +1187,7 @@
 
       document.querySelectorAll(".mood-btn").forEach((btn) => {
         btn.addEventListener("click", () => {
+          stopSongPreview();
           currentMood = btn.dataset.mood;
           document.querySelectorAll(".mood-btn").forEach((b) => b.classList.remove("active"));
           btn.classList.add("active");
@@ -792,6 +1197,7 @@
             startMoodSynth();
           }
           applyMoodFilter();
+          scheduleSongFetch();
         });
       });
 
