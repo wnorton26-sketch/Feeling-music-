@@ -1,4 +1,10 @@
 <!DOCTYPE html>
+<!--
+  Resonance / Feeling Music — single-page app:
+  - Mood-based Web Audio synthesis + compressor + analyzer
+  - Canvas visualization (spectrum, waveform, particles)
+  - Optional mic / file input; Deezer/iTunes song suggestions
+-->
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -8,6 +14,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Syne:wght@500;600;700;800&display=swap" rel="stylesheet" />
   <style>
+    /* ---------- Design tokens (colors shared by UI + mood accents) ---------- */
     :root {
       --bg-deep: #06060a;
       --fg: #f4f2ff;
@@ -23,6 +30,7 @@
 
     * { box-sizing: border-box; }
 
+    /* Base page: full-height, no horizontal scroll */
     html, body {
       margin: 0;
       min-height: 100%;
@@ -36,6 +44,7 @@
       position: relative;
     }
 
+    /* Full-screen mood backdrop (JS swaps gradient via #ambient) */
     .ambient {
       position: fixed;
       inset: 0;
@@ -49,6 +58,7 @@
       transition: opacity 1.2s ease;
     }
 
+    /* Subtle film grain via inline SVG noise filter */
     .ambient::after {
       content: "";
       position: absolute;
@@ -57,6 +67,7 @@
       opacity: 0.6;
     }
 
+    /* Content sits above .ambient (z-index stacking) */
     .wrap {
       position: relative;
       z-index: 1;
@@ -121,6 +132,7 @@
       gap: 1.25rem;
     }
 
+    /* Frosted glass cards */
     .panel {
       background: var(--glass);
       border: 1px solid var(--glass-border);
@@ -189,6 +201,7 @@
     .mood-btn[data-mood="angry"].active { box-shadow: 0 0 24px rgba(255, 77, 106, 0.25); border-color: rgba(255, 77, 106, 0.45); }
     .mood-btn[data-mood="melancholy"].active { box-shadow: 0 0 24px rgba(183, 148, 246, 0.25); border-color: rgba(183, 148, 246, 0.45); }
 
+    /* Helper text under panels */
     .hint {
       font-size: 0.88rem;
       color: var(--muted);
@@ -196,6 +209,7 @@
       line-height: 1.55;
     }
 
+    /* Canvas stage: 16:9 frame + HUD overlay */
     .viz-wrap {
       position: relative;
       border-radius: 22px;
@@ -215,6 +229,7 @@
       height: 100%;
     }
 
+    /* Bottom gradient strip: current mood label + level meter */
     .viz-hud {
       position: absolute;
       left: 0;
@@ -257,6 +272,7 @@
       height: 36px;
     }
 
+    /* One column in the peak meter (height set from JS) */
     .level-bar {
       width: 5px;
       border-radius: 2px;
@@ -265,6 +281,7 @@
       transition: height 0.06s ease-out, background 0.2s;
     }
 
+    /* Play / mic / file + sliders */
     .controls {
       display: flex;
       flex-wrap: wrap;
@@ -272,6 +289,7 @@
       align-items: center;
     }
 
+    /* Primary CTA (gradient) */
     .btn-primary {
       appearance: none;
       border: none;
@@ -295,6 +313,7 @@
 
     .btn-primary:active { transform: scale(0.98); }
 
+    /* Ghost / outline buttons */
     .btn-secondary {
       appearance: none;
       border: 1px solid var(--glass-border);
@@ -341,6 +360,7 @@
       max-width: 100%;
     }
 
+    /* ---------- Real song suggestion panel (Deezer / iTunes / fallback) ---------- */
     .song-panel .song-actions {
       display: flex;
       flex-wrap: wrap;
@@ -462,6 +482,7 @@
   </style>
 </head>
 <body>
+  <!-- Fixed layer: mood-colored gradients (updated in JS when mood changes) -->
   <div class="ambient" id="ambient" aria-hidden="true"></div>
   <div class="wrap">
     <header>
@@ -473,6 +494,7 @@
     </header>
 
     <main>
+      <!-- Mood selector: data-mood drives synthesis + visuals + song search terms -->
       <section class="panel">
         <div class="panel-head">
           <h2>Atmosphere</h2>
@@ -488,6 +510,7 @@
         </p>
       </section>
 
+      <!-- Audio-reactive canvas (2D); internal resolution set in resize() -->
       <div class="viz-wrap">
         <canvas id="viz" width="1280" height="720" aria-label="Audio-reactive visualization"></canvas>
         <div class="viz-hud">
@@ -499,6 +522,7 @@
         </div>
       </div>
 
+      <!-- Transport, mic, file upload, volume + visual intensity -->
       <section class="panel">
         <div class="controls">
           <button type="button" class="btn-primary" id="toggle-audio">Play</button>
@@ -521,6 +545,7 @@
         </div>
       </section>
 
+      <!-- Fetches a real track via API; preview uses separate HTMLAudioElement -->
       <section class="panel song-panel">
         <div class="panel-head">
           <h2>Real song for your mood</h2>
@@ -556,8 +581,17 @@
     <footer>Web Audio API · Dynamics · FFT · Time domain · Canvas 2D</footer>
   </div>
 
+  <!--
+    =============================================================================
+    APPLICATION LOGIC (IIFE — no globals)
+    - Web Audio: synth → moodFilter → masterGain → compressor → analyser → speakers
+    - Mic / file: connect directly to masterGain
+    - Canvas: requestAnimationFrame loop reads analyser + draws
+    =============================================================================
+  -->
   <script>
     (function () {
+      /* Display names + HUD subtitle (BPM / style) per mood */
       const moodLabels = { chill: "Chill", happy: "Happy", angry: "Angry", melancholy: "Melancholy" };
       const moodHints = {
         chill: "72 BPM · ambient arp",
@@ -566,6 +600,11 @@
         melancholy: "80 BPM · minor pad",
       };
 
+      /*
+        Visual + ambient background per mood:
+        hue/hue2/sat — canvas HSL; speed/pulse — animation; bg/bg2 — lerp targets;
+        ambient — CSS gradient string for #ambient
+      */
       const moods = {
         chill: {
           hue: 210,
@@ -613,13 +652,14 @@
         },
       };
 
+      /* App state */
       let currentMood = "chill";
       let audioRunning = false;
       let micMode = false;
       let vizIntensity = 1;
       let lerpBg = [8, 12, 28];
       let lerpBg2 = [18, 28, 52];
-      let lerpHue = 210;
+      let lerpHue = 210; /* smoothed toward current mood’s hue in draw() */
 
       const canvas = document.getElementById("viz");
       const ctx = canvas.getContext("2d");
@@ -627,6 +667,7 @@
       const hudMood = document.getElementById("hud-mood");
       const hudBpm = document.getElementById("hud-bpm");
       const levelMeter = document.getElementById("level-meter");
+      /* Build 16 vertical bars for the on-canvas peak meter */
       for (let i = 0; i < 16; i++) {
         const b = document.createElement("div");
         b.className = "level-bar";
@@ -634,6 +675,7 @@
       }
       const levelBars = levelMeter.querySelectorAll(".level-bar");
 
+      /* Web Audio graph (created lazily in ensureAudio) */
       let audioCtx = null;
       let masterGain = null;
       let synthGain = null;
@@ -647,7 +689,7 @@
       let micSourceNode = null;
       let scheduledUntil = 0;
       let step = 0;
-      let fileAudio = null;
+      let fileAudio = null; /* <audio> for user file; routed through Web Audio */
       let fileMediaNode = null;
 
       const toggleBtn = document.getElementById("toggle-audio");
@@ -660,6 +702,7 @@
         vizIntensity = Number(vizSlider.value) / 100;
       });
 
+      /* Deezer/iTunes search strings per mood */
       const moodSongQueries = {
         chill: "chill relaxing lofi ambient",
         happy: "happy upbeat pop dance",
@@ -667,6 +710,7 @@
         melancholy: "melancholic sad indie acoustic",
       };
 
+      /* Used when APIs fail (offline / CORS): title + artist only */
       const fallbackCurated = {
         chill: [
           { title: "Weightless", artist: "Marconi Union" },
@@ -706,7 +750,7 @@
       let songPreviewAudio = null;
       let lastSynthWasRunning = false;
       let songFetchDebounce = null;
-      let lastTrackPool = [];
+      let lastTrackPool = []; /* normalized tracks for “Pick another” */
 
       function pickRandom(arr) {
         return arr[Math.floor(Math.random() * arr.length)];
@@ -727,6 +771,7 @@
         songErrorEl.textContent = "";
       }
 
+      /* Tear down HTML5 preview; resume procedural synth if it was playing */
       function stopSongPreview() {
         if (songPreviewAudio) {
           songPreviewAudio.pause();
@@ -740,6 +785,7 @@
         }
       }
 
+      /* Populate song card DOM; hide “Open track” when no store URL */
       function displayTrack(track) {
         if (track.artwork) {
           songCover.src = track.artwork;
@@ -768,6 +814,7 @@
         fetchAgainBtn.disabled = lastTrackPool.length < 2;
       }
 
+      /* Public Deezer search API (no key); returns JSON with CORS enabled */
       async function fetchDeezer(query) {
         const url = `https://api.deezer.com/search?q=${encodeURIComponent(query)}&limit=25`;
         const res = await fetch(url);
@@ -775,6 +822,7 @@
         return res.json();
       }
 
+      /* Public iTunes Search JSON (may be blocked by CORS from file://) */
       async function fetchItunes(query) {
         const url = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&entity=song&limit=25`;
         const res = await fetch(url);
@@ -782,6 +830,7 @@
         return res.json();
       }
 
+      /* Deezer search result → unified shape for the UI */
       function mapDeezerTrack(t) {
         return {
           title: t.title,
@@ -796,6 +845,7 @@
         };
       }
 
+      /* Apple Music / iTunes search result → unified shape */
       function mapItunesTrack(t) {
         return {
           title: t.trackName,
@@ -810,6 +860,7 @@
         };
       }
 
+      /* Curated offline list (no preview URL; YouTube link only) */
       function mapFallbackTrack(c) {
         const q = `${c.artist} ${c.title}`;
         return {
@@ -826,6 +877,7 @@
         };
       }
 
+      /* Try Deezer → iTunes → static fallback */
       async function loadSongForMood() {
         clearSongError();
         fetchSongBtn.disabled = true;
@@ -842,7 +894,7 @@
             return;
           }
         } catch (e) {
-          /* try next */
+          /* Deezer failed — try iTunes */
         }
         try {
           const it = await fetchItunes(q);
@@ -854,7 +906,7 @@
             return;
           }
         } catch (e) {
-          /* fallback */
+          /* iTunes failed */
         }
         lastTrackPool = fallbackCurated[currentMood].map(mapFallbackTrack);
         displayTrack(pickRandom(lastTrackPool));
@@ -863,6 +915,7 @@
         fetchAgainBtn.disabled = lastTrackPool.length < 2;
       }
 
+      /* Random re-pick from same API result set (avoid duplicate title if possible) */
       function pickAnotherFromPool() {
         if (lastTrackPool.length < 2) return;
         stopSongPreview();
@@ -875,6 +928,7 @@
         displayTrack(next);
       }
 
+      /* Debounced auto-fetch after mood button changes */
       function scheduleSongFetch() {
         if (!autoSongCheckbox.checked) return;
         clearTimeout(songFetchDebounce);
@@ -892,6 +946,7 @@
         pickAnotherFromPool();
       });
 
+      /* Play MP3 preview or open YouTube if no preview URL */
       songPreviewBtn.addEventListener("click", () => {
         if (songTitleEl.textContent === "—" || !lastTrackPool.length) return;
         const track =
@@ -922,6 +977,7 @@
         });
       });
 
+      /* Mood-specific biquad: only affects procedural synth (synthGain → moodFilter → masterGain) */
       function applyMoodFilter() {
         if (!moodFilter || !audioCtx) return;
         const now = audioCtx.currentTime;
@@ -947,6 +1003,7 @@
         }
       }
 
+      /* Lazily create AudioContext + full graph; volume slider wires once */
       function ensureAudio() {
         if (!audioCtx) {
           audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -984,10 +1041,12 @@
         return audioCtx;
       }
 
+      /* MIDI note number → Hz (A4 = 69) */
       function mtof(m) {
         return 440 * Math.pow(2, (m - 69) / 12);
       }
 
+      /* One-shot oscillator into synth bus; used by all mood loops */
       function scheduleTone(time, freq, dur, type, gainVal) {
         const ac = ensureAudio();
         const osc = ac.createOscillator();
@@ -1004,6 +1063,7 @@
         moodNodes.push({ osc, g });
       }
 
+      /* Short bandpassed noise (e.g. angry kicks) */
       function scheduleNoiseBurst(time, dur, gainVal, centerHz) {
         const ac = ensureAudio();
         const bufferSize = ac.sampleRate * 0.06;
@@ -1028,6 +1088,7 @@
         moodNodes.push({ noise, g });
       }
 
+      /* ~72 BPM: pentatonic arp + occasional low pad */
       function loopChill() {
         const ac = ensureAudio();
         const now = Math.max(ac.currentTime, scheduledUntil);
@@ -1050,6 +1111,7 @@
         moodNodes._timer = setTimeout(loopChill, Math.max(50, (scheduledUntil - ac.currentTime) * 1000 - 80));
       }
 
+      /* ~118 BPM: chord stabs + square accents */
       function loopHappy() {
         const ac = ensureAudio();
         const now = Math.max(ac.currentTime, scheduledUntil);
@@ -1073,6 +1135,7 @@
         moodNodes._timer = setTimeout(loopHappy, Math.max(40, (scheduledUntil - ac.currentTime) * 1000 - 60));
       }
 
+      /* ~140 BPM: noise + detuned saws */
       function loopAngry() {
         const ac = ensureAudio();
         const now = Math.max(ac.currentTime, scheduledUntil);
@@ -1091,6 +1154,7 @@
         moodNodes._timer = setTimeout(loopAngry, Math.max(35, (scheduledUntil - ac.currentTime) * 1000 - 50));
       }
 
+      /* ~80 BPM: minor scale + pad triangles */
       function loopMelancholy() {
         const ac = ensureAudio();
         const now = Math.max(ac.currentTime, scheduledUntil);
@@ -1113,6 +1177,7 @@
         moodNodes._timer = setTimeout(loopMelancholy, Math.max(45, (scheduledUntil - ac.currentTime) * 1000 - 70));
       }
 
+      /* Clear sequencer timer; active oscillators stop by scheduled stop time */
       function stopMoodSynth() {
         if (moodNodes._timer) {
           clearTimeout(moodNodes._timer);
@@ -1122,6 +1187,7 @@
         scheduledUntil = 0;
       }
 
+      /* (Re)start the loop matching currentMood */
       function startMoodSynth() {
         stopMoodSynth();
         ensureAudio();
@@ -1133,6 +1199,7 @@
         else loopMelancholy();
       }
 
+      /* Disconnect <audio> element source and revoke blob URL */
       function teardownFileAudio() {
         if (fileMediaNode) {
           try { fileMediaNode.disconnect(); } catch (e) {}
@@ -1146,6 +1213,7 @@
         }
       }
 
+      /* Disconnect MediaStreamSource and stop all mic tracks */
       function stopMic() {
         if (micSourceNode) {
           try { micSourceNode.disconnect(); } catch (e) {}
@@ -1159,6 +1227,7 @@
         micBtn.textContent = "Microphone";
       }
 
+      /* Mic → masterGain (not through moodFilter) */
       async function startMic() {
         ensureAudio();
         stopMoodSynth();
@@ -1179,12 +1248,14 @@
         if (audioCtx.state === "suspended") await audioCtx.resume();
       }
 
+      /* HUD + page background gradient */
       function setUiMood() {
         hudMood.textContent = moodLabels[currentMood];
         hudBpm.textContent = moodHints[currentMood];
         ambientEl.style.background = moods[currentMood].ambient;
       }
 
+      /* Mood buttons: update synthesis, visuals, optional song fetch */
       document.querySelectorAll(".mood-btn").forEach((btn) => {
         btn.addEventListener("click", () => {
           stopSongPreview();
@@ -1201,6 +1272,7 @@
         });
       });
 
+      /* Master transport: toggles gain + procedural synth vs file/mic */
       toggleBtn.addEventListener("click", async () => {
         ensureAudio();
         if (audioCtx.state === "suspended") await audioCtx.resume();
@@ -1224,6 +1296,7 @@
         }
       });
 
+      /* Toggle getUserMedia mic input */
       micBtn.addEventListener("click", async () => {
         try {
           if (micMode) {
@@ -1237,6 +1310,7 @@
         }
       });
 
+      /* User file → createMediaElementSource → masterGain */
       fileInput.addEventListener("change", async (e) => {
         const file = e.target.files && e.target.files[0];
         if (!file) return;
@@ -1266,6 +1340,7 @@
         if (audioCtx.state === "suspended") await audioCtx.resume();
       });
 
+      /* Hi-DPI canvas: CSS size × devicePixelRatio */
       function resize() {
         const rect = canvas.getBoundingClientRect();
         const dpr = window.devicePixelRatio || 1;
@@ -1284,10 +1359,18 @@
         return a + (b - a) * t;
       }
 
+      /* Smooth RGB transition when mood changes */
       function lerpRgb(a, b, t) {
         return [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)];
       }
 
+      /*
+        Main visualization frame:
+        1) Lerp background colors toward mood
+        2) Read FFT + time domain from analyser → bass / mid / treble
+        3) Gradient fill + aurora blobs + mirrored spectrum + waveform + particles + rings + vignette
+        4) Update HUD level meter bars
+      */
       function draw() {
         const m = moods[currentMood];
         const w = canvas.width / (window.devicePixelRatio || 1);
@@ -1308,6 +1391,7 @@
           const len = dataArray.length;
           for (let i = 0; i < len; i++) sum += dataArray[i];
           avg = sum / len / 255;
+          /* Rough frequency bands from FFT bins */
           const i0 = 0;
           const i1 = Math.floor(len * 0.08);
           const i2 = Math.floor(len * 0.35);
@@ -1350,6 +1434,7 @@
         const midY = h * 0.5;
         const specBins = 80;
         const binW = w / specBins;
+        /* Mirrored spectrum: screen blend for glow */
         ctx.save();
         ctx.globalCompositeOperation = "screen";
         for (let i = 0; i < specBins; i++) {
@@ -1371,6 +1456,7 @@
         }
         ctx.restore();
 
+        /* Oscilloscope-style waveform (time domain) */
         if (waveArray) {
           ctx.lineJoin = "round";
           ctx.lineCap = "round";
@@ -1391,6 +1477,7 @@
           ctx.shadowBlur = 0;
         }
 
+        /* Additive particles in a ring */
         const particles = 72;
         ctx.globalCompositeOperation = "lighter";
         for (let i = 0; i < particles; i++) {
@@ -1409,6 +1496,7 @@
         }
         ctx.globalCompositeOperation = "source-over";
 
+        /* Arc segments (incomplete circles) for depth */
         const rings = 6;
         for (let r = 0; r < rings; r++) {
           const rr = (0.1 + r * 0.065) * Math.min(w, h) * (1 + avg * 0.55);
@@ -1419,6 +1507,7 @@
           ctx.stroke();
         }
 
+        /* Darken edges */
         ctx.fillStyle = "rgba(0,0,0,0)";
         const vignette = ctx.createRadialGradient(cx, cy, Math.min(w, h) * 0.25, cx, cy, Math.max(w, h) * 0.75);
         vignette.addColorStop(0, "transparent");
@@ -1426,6 +1515,7 @@
         ctx.fillStyle = vignette;
         ctx.fillRect(0, 0, w, h);
 
+        /* DOM-based VU columns (right side of HUD) */
         if (levelBars.length && dataArray) {
           const peak = Math.min(1, avg * 2.2 + bass * 0.5);
           levelBars.forEach((bar, i) => {
@@ -1441,6 +1531,7 @@
         requestAnimationFrame(draw);
       }
 
+      /* First paint: sync labels + start audio context + animation loop */
       setUiMood();
       ensureAudio();
       draw();
