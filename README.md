@@ -1,12 +1,12 @@
 <div align="center">
 
-# Feeling Music
+# Feeling Music · **Resonance**
 
-**Mood-driven sound & visuals in the browser**
+**Mood → sound → canvas in the browser**
 
-Pick an atmosphere — generated music, EQ, and a live canvas react together.
+One static page: procedural audio, a dark visualization window, optional mic/file, and song suggestions from public APIs.
 
-[![Live vibe](https://img.shields.io/badge/Stack-HTML%20%7C%20CSS%20%7C%20Vanilla%20JS-6366f1?style=for-the-badge&logo=html5&logoColor=white)](https://github.com/wnorton26-sketch/Feeling-music-)
+[![Stack](https://img.shields.io/badge/stack-HTML_·_CSS_·_JS-0d4a3a?style=for-the-badge&labelColor=1a1811)](https://github.com/wnorton26-sketch/Feeling-music-)
 [![Repo](https://img.shields.io/badge/GitHub-Feeling--music--181717?style=for-the-badge&logo=github)](https://github.com/wnorton26-sketch/Feeling-music-)
 
 <br />
@@ -15,73 +15,72 @@ Pick an atmosphere — generated music, EQ, and a live canvas react together.
 
 ---
 
-## What it does
+## What you get
 
 | | |
 |:---|:---|
-| **Resonance** | Single-page app: **Resonance** — glass UI, ambient gradients, and a full-width visual stage. |
-| **Sound** | Procedural loops per mood: arps, chords, noise hits — routed through **mood EQ** (biquad) and a **dynamics compressor**. |
-| **Visuals** | **FFT spectrum** (mirrored), **time-domain waveform**, particles, rings, bloom, and a level meter — all driven by the same analyzer. |
-| **Your audio** | **Microphone** or **audio file** can replace the generator; visuals follow whatever hits the bus. |
+| **Interface** | Light paper-style layout: **narrow mood rail** + **stage** (canvas + controls). Typography: **Space Grotesk** + **Source Serif 4** — no framework. |
+| **Sound** | Per-mood loops (arps, chords, noise) through a **mood EQ** (`BiquadFilterNode`) and **dynamics compressor**. |
+| **Visuals** | **FFT** (mirrored spectrum), **waveform**, particles, rings, vignette, **VU-style meter** — all fed by one `AnalyserNode`. |
+| **External audio** | **Mic** or **audio file** into the same graph; the picture follows the signal. |
+| **Real tracks** | **Deezer** search first, then **iTunes**; offline **curated picks** + **YouTube** links if APIs fail. |
 
 ---
 
 ## Moods
 
-| Mood | Feel | Audio |
+| Mood | Canvas / vibe | Audio (approx.) |
 |:---:|:---|:---|
-| Chill | Cool blues, slow drift | ~72 BPM · ambient arpeggios · soft pad layer |
-| Happy | Warm golds, energetic | ~118 BPM · stacked chords · accents |
-| Angry | Reds, sharp motion | ~140 BPM · noise + saw / square |
-| Melancholy | Purple dusk, reflective | ~80 BPM · minor pads |
+| Chill | Cool drift | ~72 BPM · ambient arp · pad layer |
+| Happy | Warm, busy | ~118 BPM · chords · accents |
+| Angry | Sharp, intense | ~140 BPM · noise + saw / square |
+| Melancholy | Soft, minor | ~80 BPM · minor pads |
 
-Switching moods **retunes the filter** and **cross-fades** the color engine so the look stays cohesive.
+Changing mood **retunes the synth filter** and **lerps** background + canvas colors.
 
 ---
 
-## Try it
+## Run it
 
-**No install, no build.** Double-click `index.html` or open it in Chrome, Firefox, Safari, or Edge.
-
-> Browsers block audio until you interact — click **Play** once to unlock sound.
-
-Optional local server (if you prefer not to open the file directly):
+**No install, no build.** Open `index.html` in a modern browser, or serve the folder locally (helps if APIs block `file://`):
 
 ```bash
-# Python 3
 python3 -m http.server 8080
-
-# Then visit http://localhost:8080
+# http://localhost:8080
 ```
 
+> You must click **Play** once — browsers require a user gesture before audio.
+
 ---
 
-## Controls
+## Controls (as in the UI)
 
-| Control | Action |
+| Area | What it does |
 |:---|:---|
-| **Play / Pause** | Start or stop generated audio; output level follows the **Volume** slider. |
-| **Mood buttons** | Chill · Happy · Angry · Melancholy — new rhythm + EQ curve. |
-| **Volume** | Master output gain. |
-| **Visuals** | Intensity of motion, particles, and spectrum (30%–130%). |
-| **Microphone** | Stream from the mic into the same chain (permission required). |
-| **Load audio file** | Loop a file through Web Audio; **Pause** mutes without removing the file. |
+| **Pick** | Chill / Happy / Angry / Melancholy — new pattern + EQ + (optional) song fetch. |
+| **Play** | Starts or stops generated audio; level follows **Vol**. |
+| **Mic** / **Stop** | Live input into the same chain (permission required). |
+| **Vol** | Master gain. |
+| **Motion** | Visual intensity (30%–130%). |
+| **File** | Loop a local file through Web Audio. |
+| **Find a track** / **Shuffle** | Pull another track for the current mood; **Auto when mood changes** toggles debounced fetch. |
 
 ---
 
-## Tech notes
+## Tech
 
-- **Web Audio API** — oscillators, noise bursts, `BiquadFilterNode`, `DynamicsCompressorNode`, `AnalyserNode` (FFT + time domain).
-- **Canvas 2D** — layered drawing with gradients, `screen` / `lighter` compositing, vignette.
-- **Zero dependencies** — one `index.html`, easy to host on GitHub Pages or any static host.
+- **Web Audio API** — oscillators, noise, biquad mood filter, compressor, analyser (FFT + time domain).
+- **Canvas 2D** — layered passes, blend modes, animation via `requestAnimationFrame`.
+- **Fetch** — Deezer & iTunes search JSON (CORS permitting); curated fallback.
+- **Dependencies** — none. Host on **GitHub Pages** or any static server.
 
 ---
 
-## Project layout
+## Repo layout
 
 ```
 Feeling-music-/
-├── index.html    # App + styles + logic
+├── index.html    # Markup, styles, script (single file)
 ├── README.md
 └── .gitignore
 ```
@@ -96,6 +95,6 @@ Feeling-music-/
 
 <div align="center">
 
-Made for experimenting with **mood**, **sound**, and **motion** in the browser.
+Mood, signal, and motion — in one HTML file.
 
 </div>
